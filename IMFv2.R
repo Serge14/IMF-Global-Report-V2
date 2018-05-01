@@ -78,6 +78,11 @@ df = df[, .(Items = sum(PIECESC), Value = sum(VALUEC), Volume = sum(VOLUMEC)),
                Form, Additives)]
 
 # Rename company in order to align names with global report names
+#setkey(dictCompanies, localName)
+#setkey(df, Company)
+#df[dictCompanies, Company := globalName]
+
+# Rename company in order to align names with global report names
 setkey(dictCompanies, localName)
 setkey(df, Company)
 df[dictCompanies, Company := globalName]
@@ -316,6 +321,5 @@ n = dim(collect)[2]
 
 setcolorder(collect, c(n-3, 1, (n-10):(n-4), (n-2):n, 2:(n-11)))
 setorder(collect, ITEMLIST)
-
 
 write.csv(collect, "collect.csv", row.names = FALSE, na = "")
