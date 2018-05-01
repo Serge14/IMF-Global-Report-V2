@@ -11,6 +11,7 @@ df = fread("/home/sergiy/Documents/Work/Nutricia/Rework/201802/BFpivot3.csv",
 dictCompanies = fread("dictCompanies.csv")
 dictBrands = fread("dictBrands.csv")
 dictSG = fread("dictSG.csv")
+dictSpecials = fread("dictSpecials.csv")
 selection = fread("selection.csv")
 
 df = df[, c("Period", "Subbrand", "Age", "Scent", "PIECES", "VALUE", "VOLUME", 
@@ -18,7 +19,7 @@ df = df[, c("Period", "Subbrand", "Age", "Scent", "PIECES", "VALUE", "VOLUME",
 
 # Transform to upper case in order to subset
 df[, Form:=toupper(Form)]
-df = df[Form == "SOLID" | Form == "PURE" | Form == "POWDER"]
+df = df[(Form == "SOLID" | Form == "PURE" | Form == "POWDER") & PS0 == "IMF"]
 
 # Transform other columns to upper case since file consists of different letters' cases
 df[, SKU:= toupper(SKU)]
@@ -26,19 +27,23 @@ df[, PS0:=toupper(PS0)]
 df[, PS2:=toupper(PS2)]
 df[, PS3:=toupper(PS3)]
 df[, PS:=toupper(PS)]
+df[, Size:=toupper(Size)]
 df[, Brand:=toupper(Brand)]
 df[, Company:=toupper(Company)]
 df[, PriceSegment:=toupper(PriceSegment)]
 df[, Additives:=toupper(Additives)]
 
-df = df[PS0 == "IMF",]
+df[, Size := gsub("\\d\\*", "", Size)]
+df[, Size := gsub("\\.", "P", Size)]
+
+
 
 # Some rename either to avoid long names or mess with the same brand names 
 # belonging to different companies
 
 df[Company == "KHOROLSKII MK" & Brand == "MALYSH", Brand := "MALYSH KH"]
 df[Company == "KHOROLSKII MK" & Brand == "MALYUTKA", Brand := "MALYUTKA KH"]
-df[Company == "NUTRICIA" & Brand == "MALYSH ISTRINSKII", Brand := "MALYSH ISTR"] # delete ISTR
+df[Company == "NUTRICIA" & Brand == "MALYSH ISTRINSKII", Brand := "MALYSH"] # delete ISTR
 df[Company == "ASSOCIACIYA DETSKOGO PITANIYA", Company := "ASSOCIACIYA DP"]
 df[Company == "ABBOTT LABORATORIES", Company := "ABBOTT LAB"]
 df[Company == "KOMPANIYA EKSTREYD", Company := "EKSTREYD"]
@@ -77,10 +82,30 @@ df = df[, .(Items = sum(PIECESC), Value = sum(VALUEC), Volume = sum(VOLUMEC)),
         by = .(Ynb, Mnb, Brand, Size, PS0, PS2, PS3, PS, Company, PriceSegment, 
                Form, Additives)]
 
-# Rename company in order to align names with global report names
-#setkey(dictCompanies, localName)
-#setkey(df, Company)
-#df[dictCompanies, Company := globalName]
+# IF PLUS must be moved to FO
+df = df[PS3 == "PLUS" & PS2 == "IF", PS2 := "FO"]
+
+# Add new segments
+df[, PS1 := PS2]
+df[PS2 == "IF" | PS2 == "FO", PS1 := "IFFO"]
+
+# Rename segment names
+df[PS3 == "BASE" | PS3 == "PLUS", PS3 := "CORE"]
+df[PS3 == "SPECIALS", PS3 := "TAILORED"]
+
+df[PS2 == "GUM", PS2 := "GUM1TO3"]
+
+# Rename Additives names
+df[Additives == "FLAVOURED", Additives := "FLAVOURD"]
+df[Additives == "NON-FLAVOURED", Additives := "UNFLAVOU"]
+
+# Rename Price Segments' names
+df[PriceSegment == "MAINSTREAM", PriceSegment := "MAINSTRE"]
+
+# Rename Specials segment names in order to align names with global report names
+setkey(dictSpecials, localName)
+setkey(df, PS)
+df[dictSpecials, PS := globalName]
 
 # Rename company in order to align names with global report names
 setkey(dictCompanies, localName)
@@ -92,30 +117,28 @@ setkey(dictBrands, localName)
 setkey(df, Brand)
 df[dictBrands, Brand := globalName]
 
-
-
-# IF PLUS must be moved to FO
-df = df[PS3 == "PLUS" & PS2 == "IF", PS2 := "FO"]
-
-# Add new segments
-df[, PS1 := PS2]
-df[PS2 == "IF" | PS2 == "FO", PS1 := "IFFO"]
-
-df[, Organic := "NON-ORGANIC"]
+df[, Organic := "NONORGAN"]
 df[Brand == "HIPP", Organic := "ORGANIC"]
 
 # Select brands and companies to report
 sel = unique(selection$Company)
-df = df[!(Company %in% sel), Company := "ALL OTHERS"]
+df = df[!(Company %in% sel), Company := "AO"] # ALL OTHERS
 
 
 #sel = unique(selection[c("Company", "Brand")])
 sel = unique(selection[, .(Company, Brand)])
 #df1 = df1[!(Brand %in% sel), Brand := "ALL OTHER BRANDS"]
 df = df[!(paste0(df$Company, df$Brand) %in% paste0(sel$Company, sel$Brand)), 
-        Brand := "ALL OTHERS"]
+        Brand := "AO"] # ALL OTHERS
 
 df[Brand == "ALL OTHERS", PriceSegment := "NOT PRICED"]
+
+# Function to delete NA
+
+#NAdelete = function(DT) {
+#  n = dim(DT)[2]
+#  for (i in names(DT)[(n-6):n]) {DT[is.na(get(i)), (i):=""]}
+#}
 
 # H1 L1
 collect = dcast(df[, .(PS0, Ynb, Mnb, Volume, Value)], 
@@ -182,6 +205,12 @@ dftemp = dcast(dftemp,
                fun.aggregate = sum)
 
 collect = rbind(collect, dftemp, fill = TRUE)
+
+n = dim(collect)[2]
+for (i in names(collect)[(n-6):n]) {
+  collect[is.na(get(i)), (i):=""]
+}
+#collect = NAdelete(collect)
 
 collect[, ITEMLIST := paste(1, PS0, PS1, PS2, PS3, PS, Company, Brand, Size)]
 
@@ -258,6 +287,11 @@ dftemp = dcast(df[,.(PS0, Company, Brand, PriceSegment, PS1, PS2, PS3, PS,
 
 collect2 = rbind(collect2, dftemp, fill = TRUE)
 
+n = dim(collect2)[2]
+for (i in names(collect2)[(n-6):n]) {
+  collect2[is.na(get(i)), (i):=""]
+}
+
 collect2[, ITEMLIST := paste(2, PS0, Company, Brand, PriceSegment, PS1, PS2, PS3, PS)]
 
 # delete all connected with NA at the names of ITEMLIST
@@ -311,11 +345,16 @@ dftemp = dcast(df[, .(PS0, Form, Organic, Company, Brand, PS2,
 
 collect3 = rbind(collect3, dftemp, fill = TRUE)
 
+n = dim(collect3)[2]
+for (i in names(collect3)[(n-3):n]) {
+  collect3[is.na(get(i)), (i):=""]
+}
+
 collect3[, ITEMLIST := paste(3, PS0, Form, Organic, Company, Brand, PS2)]
 
 collect = rbind(collect, collect2, collect3, fill = TRUE)
 
-collect[, ITEMLIST := gsub(" NA", "", ITEMLIST)]
+#collect[, ITEMLIST := gsub(" NA", "", ITEMLIST)]
 
 n = dim(collect)[2]
 
