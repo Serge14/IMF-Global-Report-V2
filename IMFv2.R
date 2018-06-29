@@ -1,11 +1,11 @@
 library(data.table)
-#library(stringr)
+library(stringr)
 
 setwd("/home/sergiy/Documents/Work/Nutricia/Global/Ver2")
 
 # Read all necessary files
 
-df = fread("/home/sergiy/Documents/Work/Nutricia/Rework/201802/BFpivot3.csv", 
+df = fread("/home/sergiy/Documents/Work/Nutricia/Rework/201805/BFpivot3.csv", 
            header = TRUE, stringsAsFactors = FALSE, data.table = TRUE)
 
 dictCompanies = fread("dictCompanies.csv")
@@ -13,8 +13,9 @@ dictBrands = fread("dictBrands.csv")
 dictSG = fread("dictSG.csv")
 dictSpecials = fread("dictSpecials.csv")
 selection = fread("selection.csv")
+tags = fread("tags.csv")
 
-df = df[, c("Period", "Subbrand", "Age", "Scent", "PIECES", "VALUE", "VOLUME", 
+df = df[, c("Subbrand", "Age", "Scent", "PIECES", "VALUE", "VOLUME", 
             "Channel", "Region", "Coef", "Correction") := NULL] # or "Correction" in a full name
 
 # Transform to upper case in order to subset
@@ -299,7 +300,7 @@ collect2[, ITEMLIST := paste(2, PS0, Company, Brand, PriceSegment, PS1, PS2, PS3
 
 # H3 L1
 collect3 = dcast(df[, .(PS0, Form, Ynb, Mnb, Volume, Value)], 
-                 PS0 + Form ~ Ynb + Mnb, 
+                 PS0 ~ Ynb + Mnb, 
                  value.var = c("Volume", "Value"), 
                  fun.aggregate = sum)
 
@@ -346,7 +347,7 @@ dftemp = dcast(df[, .(PS0, Form, Organic, Company, Brand, PS2,
 collect3 = rbind(collect3, dftemp, fill = TRUE)
 
 n = dim(collect3)[2]
-for (i in names(collect3)[(n-3):n]) {
+for (i in names(collect3)[(n-5):n]) {
   collect3[is.na(get(i)), (i):=""]
 }
 
@@ -361,4 +362,25 @@ n = dim(collect)[2]
 setcolorder(collect, c(n-3, 1, (n-10):(n-4), (n-2):n, 2:(n-11)))
 setorder(collect, ITEMLIST)
 
+# an alternative could be trimsws from Base
+collect[, ITEMLIST := str_trim(ITEMLIST)]
+
+# Add tag and fillassign new tags
+
+collect[tags, on = 'ITEMLIST', TAG := i.TAG]
+
+
+# define max tag
+tags[, No := as.integer(gsub("TAG", "", TAG))]
+setcolorder(collect, c(n+1, 1:n))
+
+if (max(tags$No) < collect[, .N]) {
+#collect$TAG[is.na(collect$TAG)] = paste0("TAG", seq(max(tags$No)+1, nrow(collect)))
+collect[is.na(TAG), TAG := paste0("TAG", seq(max(tags$No)+1, nrow(collect)))]
+write.csv(collect[,.(TAG, ITEMLIST)], "tags.csv", row.names = FALSE)
+} else {
+  print("Something wrong or not")
+}
 write.csv(collect, "collect.csv", row.names = FALSE, na = "")
+
+
