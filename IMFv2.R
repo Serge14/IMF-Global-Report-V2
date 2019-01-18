@@ -5,7 +5,7 @@ setwd("/home/sergiy/Documents/Work/Nutricia/Global/Ver2")
 
 # Read all necessary files
 
-df = fread("/home/sergiy/Documents/Work/Nutricia/Rework/201805/BFpivot3.csv", 
+df = fread("/home/sergiy/Documents/Work/Nutricia/Rework/201811/3/BFpivot3.csv", 
            header = TRUE, stringsAsFactors = FALSE, data.table = TRUE)
 
 dictCompanies = fread("dictCompanies.csv")
@@ -15,8 +15,13 @@ dictSpecials = fread("dictSpecials.csv")
 selection = fread("selection.csv")
 tags = fread("tags.csv")
 
-df = df[, c("Subbrand", "Age", "Scent", "PIECES", "VALUE", "VOLUME", 
-            "Channel", "Region", "Coef", "Correction") := NULL] # or "Correction" in a full name
+# df = df[, c("Subbrand", "Age", "Scent", "PIECES", "VALUE", "VOLUME", 
+#             "Channel", "Coef", "Correction", "Acidified",
+#             "Scent2", "ScentType") := NULL] # or "Correction" in a full name
+
+df = df[, c("Subbrand", "Age", "Scent", "PIECES", "VALUE", "VOLUME",
+            "Channel", "EC", "AC", "Acidified",
+            "Scent2", "ScentType") := NULL] # or "Correction" in a full name
 
 # Transform to upper case in order to subset
 df[, Form:=toupper(Form)]
@@ -93,6 +98,9 @@ df[PS2 == "IF" | PS2 == "FO", PS1 := "IFFO"]
 # Rename segment names
 df[PS3 == "BASE" | PS3 == "PLUS", PS3 := "CORE"]
 df[PS3 == "SPECIALS", PS3 := "TAILORED"]
+
+# for some reason Goat has to be in Core segment
+df[PS == "GOAT", PS3 := "CORE"]
 
 df[PS2 == "GUM", PS2 := "GUM1TO3"]
 
